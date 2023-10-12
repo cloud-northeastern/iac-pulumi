@@ -1,19 +1,21 @@
 import * as aws from "@pulumi/aws";
 import * as pulumi from "@pulumi/pulumi";
 
+const config = new pulumi.Config();
+
 // Base CIDR block
-const baseCidrBlock = "10.0.0.0/16";
+const baseCidrBlock = config.require("vpcCidr");
 const [baseFirstOctet, baseSecondOctet] = baseCidrBlock.split('.').slice(0, 2);
 
 // Get the availability zones for the region
 const availabilityZones1 = pulumi.output(aws.getAvailabilityZones({
-    state: "available"
+    state: config.get("state")
 }));
 
 const availabilityZones = availabilityZones1.apply(az => az.names.slice(0, 3));
 
 // Create a VPC
-const vpc = new aws.ec2.Vpc("my-vpc", {
+const vpc = new aws.ec2.Vpc(config.require("vpcName"), {
     cidrBlock: baseCidrBlock,
 });
 
@@ -22,7 +24,7 @@ const publicSubnets = availabilityZones.apply(azs =>
     azs.map((az, index) => {
         const subnet = new aws.ec2.Subnet(`public-subnet-${az}`, {
             vpcId: vpc.id,
-            cidrBlock: `${baseFirstOctet}.${baseSecondOctet}.${index + 1}.0/24`,
+            cidrBlock: `${baseFirstOctet}.${baseSecondOctet}.${index + 1}.${config.require("cidrEnd")}`,
             availabilityZone: az,
             mapPublicIpOnLaunch: true,
         });
@@ -34,7 +36,7 @@ const privateSubnets = availabilityZones.apply(azs =>
     azs.map((az, index) => {
         const subnet = new aws.ec2.Subnet(`private-subnet-${az}`, {
             vpcId: vpc.id,
-            cidrBlock: `${baseFirstOctet}.${baseSecondOctet}.${index + 11}.0/24`,
+            cidrBlock: `${baseFirstOctet}.${baseSecondOctet}.${index + 11}.${config.get("cidrEnd")}`,
             availabilityZone: az,
         });
         return subnet;
@@ -48,7 +50,7 @@ const internetGateway = new aws.ec2.InternetGateway("my-internet-gateway", {
 });
 
 // Create a public route table
-const publicRouteTable = new aws.ec2.RouteTable("public-route-table", {
+const publicRouteTable = new aws.ec2.RouteTable(config.require("internetGatewayName"), {
   vpcId: vpc.id,
 });
 
@@ -64,7 +66,7 @@ publicSubnets.apply(subnets => {
 });
 
 // Create a private route table
-const privateRouteTable = new aws.ec2.RouteTable("private-route-table", {
+const privateRouteTable = new aws.ec2.RouteTable(config.require("publicRouteTableName"), {
     vpcId: vpc.id,
 });
 
@@ -81,6 +83,6 @@ privateSubnets.apply(subnets => {
 // Create a public route in the public route table
 new aws.ec2.Route("public-route", {
     routeTableId: publicRouteTable.id,
-    destinationCidrBlock: "0.0.0.0/0",
+    destinationCidrBlock: config.require("publicRouteCidrBlock"),
     gatewayId: internetGateway.id,
 });
