@@ -1,0 +1,5 @@
+encryptionsalt: v1:EHwdSQ2NFU0=:v1:dMiDNzJaFKbRkRG6:HpmAHgIX2Cv1GMod9GL6qNZ2stxt/w==
+config:
+  aws-native:region: us-east-1
+  aws:region: us-west-1
+  pulumi-typescript:vpcCidr: 10.0.0.0/16
