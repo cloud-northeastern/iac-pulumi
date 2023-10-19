@@ -1,6 +1,7 @@
 encryptionsalt: v1:EHwdSQ2NFU0=:v1:dMiDNzJaFKbRkRG6:HpmAHgIX2Cv1GMod9GL6qNZ2stxt/w==
 config:
   aws:region: us-east-1
+  amiId: "ami-Id"
   state: "available"
   vpcCidr: 10.0.0.0/16
   cidr: "10.0"
