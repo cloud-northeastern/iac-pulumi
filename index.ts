@@ -1,17 +1,13 @@
-import * as aws from "@pulumi/aws";
 import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
+import * as awsx from "@pulumi/awsx";
 
 const config = new pulumi.Config();
 
-// Base CIDR block
-const baseCidrBlock: string = "10.0.0.0/18";
+// const region = aws.config.region || "us-east-1";
+const vpcCidrBlock = config.require("vpcCidrBlock");
 
-// Get the availability zones for the region
-const completeAvailabilityZones = pulumi.output(aws.getAvailabilityZones({
-    state: "available"
-}));
-
-const availabilityZones = completeAvailabilityZones.apply(az => az.names.slice(0, 3));
+const availabilityZones = aws.getAvailabilityZones({});
 
 // Function to calculate the new subnet mask
 function calculateNewSubnetMask(vpcMask: number, numSubnets: number): number {
@@ -42,28 +38,23 @@ function generateSubnetCidrBlocks(baseCidrBlock: string, numSubnets: number): st
     return subnetCidrBlocks;
 }
 
-// Create a VPC
-const vpc = new aws.ec2.Vpc("my-vpc", {
-    cidrBlock: baseCidrBlock,
-});
 
-// Create subnets
-const subnetCidrBlocks = generateSubnetCidrBlocks(baseCidrBlock, 6); // Assuming 3 public and 3 private subnets
+// Define a name for the VPC
+const vpcDev = config.require("vpcDev");
+const vpc = new aws.ec2.Vpc(vpcDev, { cidrBlock: vpcCidrBlock, tags: { Name: vpcDev, }, });
 
-const publicSubnets = availabilityZones.apply(azs =>
-    azs.map((az, index) => {
-        const subnet = new aws.ec2.Subnet(`public-subnet-${az}`, {
-            vpcId: vpc.id,
-            cidrBlock: subnetCidrBlocks[index],
-            availabilityZone: az,
-            mapPublicIpOnLaunch: true,
-        });
-        return subnet;
-    })
-);
+const amiId = config.require("amiId");
+const instanceType = config.require("instanceType");
+let publicSubnets: aws.ec2.Subnet[] = [];
+let privateSubnets: aws.ec2.Subnet[] = [];
 
-const securityGroup = new aws.ec2.SecurityGroup("my-security-group", {
+
+const applicationSecurityGroupName = config.require("application-security-group");
+
+const applicationSecurityGroup = new aws.ec2.SecurityGroup(applicationSecurityGroupName, {
     vpcId: vpc.id,
+    description: "Security group for the web application",
+    tags: { Name: applicationSecurityGroupName },
     ingress: [
         {
             fromPort: 22,
@@ -71,78 +62,259 @@ const securityGroup = new aws.ec2.SecurityGroup("my-security-group", {
             protocol: "tcp",
             cidrBlocks: ["0.0.0.0/0"],
         },
+        {
+            fromPort: 80,
+            toPort: 80,
+            protocol: "tcp",
+            cidrBlocks: ["0.0.0.0/0"],
+        },
+        {
+            fromPort: 443,
+            toPort: 443,
+            protocol: "tcp",
+            cidrBlocks: ["0.0.0.0/0"],
+        },
+        {
+            fromPort: 9001,
+            toPort: 9001,
+            protocol: "tcp",
+            cidrBlocks: ["0.0.0.0/0"],
+        },
+        {
+            fromPort: 3306,
+            toPort: 3306,
+            protocol: "tcp",
+            cidrBlocks: ["0.0.0.0/0"],
+        },
     ],
+      // Add an egress rule to allow outbound traffic to the RDS instance
+
+      egress: [
+        {
+            fromPort: 3306,
+            toPort: 3306,
+            protocol: "tcp",
+            // securityGroups: [databaseSecurityGroup.id], // Assuming databaseSecurityGroup is the security group for RDS
+            cidrBlocks: ["0.0.0.0/0"],
+        },
+    ],
+    
 });
 
-//Create ec2 Instance
-const ec2Instance = new aws.ec2.Instance("my-ec2-instance", {
-    instanceType: "t2.micro", // Change the instance type as needed
-    ami: config.require("amiId"),
-    subnetId: publicSubnets[0].id, 
-    keyName: "cloud", // Replace with your key pair
-    tags: {
-        Name: "MyEC2Instance",
-    },
+const igw = config.require("InternetGateway");
+const iGT = new aws.ec2.InternetGateway(igw, {
+    vpcId: vpc.id,
+    tags: { Name: igw, },
 });
 
+const publicRouteTable = config.require("publicRouteTableName");
+const privateRouteTable = config.require("privateRouteTableName");
 
+const pubRouteTable = new aws.ec2.RouteTable(publicRouteTable, {
+    vpcId: vpc.id,
+    tags: { Name: publicRouteTable, },
+});
 
-const privateSubnets = availabilityZones.apply(azs =>
-    azs.map((az, index) => {
-        const subnet = new aws.ec2.Subnet(`private-subnet-${az}`, {
+const priRouteTable = new aws.ec2.RouteTable(privateRouteTable, {
+    vpcId: vpc.id,
+    tags: { Name: privateRouteTable, },
+});
+
+// Creating subnet
+const subnetCidrBlocks = generateSubnetCidrBlocks(vpcCidrBlock, 6);
+
+const pubSubnetName = config.require("public-subnet");
+const priSubnetName = config.require("private-subnet");
+
+// Create public and private subnets for each Availability Zone
+
+const createSubnets = async () => {
+    const zones = await availabilityZones;
+    const selectedZones = zones.names.slice(0, 3);
+
+    const createSubnetPromises = selectedZones.map(async (zone, index) => {
+
+        const pubSubnetTag = `${pubSubnetName}-${index}`;
+        const priSubnetTag = `${priSubnetName}-${index}`;
+
+        // Create public subnet
+        const publicSubnet = new aws.ec2.Subnet(pubSubnetTag, {
+            // cidrBlock: `10.0.${index + 1}.0/24`,
+            cidrBlock: subnetCidrBlocks[index],
+            availabilityZone: zone,
             vpcId: vpc.id,
-            cidrBlock: subnetCidrBlocks[index + 3], // Offset by 3 to use different CIDR blocks for private subnets
-            availabilityZone: az,
+            mapPublicIpOnLaunch: true, // This makes instances in the public subnet receive public IPs.
+            tags: { Name: pubSubnetTag, },
         });
-        return subnet;
-    })
-);
+        publicSubnets.push(publicSubnet);
 
-// Create an Internet Gateway
-const internetGateway = new aws.ec2.InternetGateway("my-internet-gateway", {
-    vpcId: vpc.id,
-});
-
-// Create a public route table
-const publicRouteTable = new aws.ec2.RouteTable("public-route-table", {
-    vpcId: vpc.id,
-});
-
-// Attach all public subnets to the public route table
-publicSubnets.apply(subnets => {
-    subnets.forEach((subnet, index) => {
-        new aws.ec2.RouteTableAssociation(`public-subnet-rt-association-${index}`, {
-            subnetId: subnet.id,
-            routeTableId: publicRouteTable.id,
+        // Create private subnet
+        const privateSubnet = new aws.ec2.Subnet(priSubnetTag, {
+            // cidrBlock: `10.0.${index + 100}.0/24`, // Assuming a /24 CIDR block for each private subnet.
+            cidrBlock: subnetCidrBlocks[index + 3],
+            availabilityZone: zone,
+            vpcId: vpc.id,
+            tags: { Name: priSubnetTag, },
         });
+        privateSubnets.push(privateSubnet);
+
+        const publicSubnetAssociation = config.require("public-subnet-assoc");
+        const privateSubnetAssociation = config.require("private-subnet-assoc");
+
+        // Associate public subnet with the single public route table
+        const publicSubnetAssoc = new aws.ec2.RouteTableAssociation(`${publicSubnetAssociation}-${index}`, {
+            subnetId: publicSubnet.id,
+            routeTableId: pubRouteTable.id,
+
+        });
+
+        // Associate private subnet with the single private route table
+        const privateSubnetAssoc = new aws.ec2.RouteTableAssociation(`${privateSubnetAssociation}-${index}`, {
+            subnetId: privateSubnet.id,
+            routeTableId: priRouteTable.id,
+        });
+        return { publicSubnets, privateSubnets };
+
     });
-});
+    const createdSubnets = await Promise.all(createSubnetPromises);
 
-// Create a private route table
-const privateRouteTable = new aws.ec2.RouteTable("private-route-table", {
-    vpcId: vpc.id,
-});
+    return createdSubnets;
 
-// Attach all private subnets to the private route table
-privateSubnets.apply(subnets => {
-    subnets.forEach((subnet, index) => {
-        new aws.ec2.RouteTableAssociation(`private-subnet-rt-association-${index}`, {
-            subnetId: subnet.id,
-            routeTableId: privateRouteTable.id,
-        });
-    });
-});
+};
 
-// Create a public route in the public route table
-new aws.ec2.Route("public-route", {
-    routeTableId: publicRouteTable.id,
+const publicRouteName = config.require("public-route");
+
+const publicRoute = new aws.ec2.Route(publicRouteName, {
+    routeTableId: pubRouteTable.id,
     destinationCidrBlock: "0.0.0.0/0",
-    gatewayId: internetGateway.id,
+    gatewayId: iGT.id,
 });
 
-// Export subnet IDs
-export const vpcId = vpc.id;
-export const publicSubnetIds = publicSubnets.apply(subnets => subnets.map(subnet => subnet.id));
-export const privateSubnetIds = privateSubnets.apply(subnets => subnets.map(subnet => subnet.id));
-// Export EC2 instance ID
-export const ec2InstanceId = ec2Instance.id;
+const public_key = config.require("pub_key");
+
+const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
+    publicKey: public_key,
+});
+
+(async () => {
+    // const publicSubnets= await createSubnets();
+    // console.log("Subnets:", publicSubnets);
+    const subnetsResult = await createSubnets();
+    const publicSubnets = subnetsResult[0].publicSubnets;
+    const privateSubnets = subnetsResult[0].privateSubnets;
+
+    const selectedPublicSubnet = publicSubnets.length > 0 ? publicSubnets[0] : null;
+    const selectedPrivateSubnet = privateSubnets.length > 0 ? privateSubnets[0] : null;
+
+    // console.log("selectedPublicSubnet:", selectedPublicSubnet);
+
+    if (!selectedPublicSubnet || !selectedPrivateSubnet) {
+        console.error("No public or private subnet found. Aborting EC2 and RDS instance creation.");
+        return;
+    }
+
+    // DB Created
+
+    const databaseSecurityGroupName = config.require("database-security-group");
+    const name = config.require("name");
+    const dbUserName = config.require("username");
+    const dbPassword = config.require("password");
+    
+    // DB Security
+    const databaseSecurityGroup = new aws.ec2.SecurityGroup(databaseSecurityGroupName, {
+        vpcId: vpc.id,
+        description: "Security group for the RDS instance",
+        tags: { Name: databaseSecurityGroupName },
+        ingress: [
+            {
+                fromPort: 3306,
+                toPort: 3306,
+                protocol: "tcp",
+                securityGroups: [applicationSecurityGroup.id],
+            },
+        ],
+    });
+    // DB ParameterGroup
+
+    const dbParameterGroupName = config.require("db-parameter-group");
+    const dbParameterGroup = new aws.rds.ParameterGroup(dbParameterGroupName, {
+        family: "postgres13",
+        parameters: [
+            {
+                name: "character_set_server",
+                value: "utf8mb4",
+            },
+            {
+                name: "collation_server",
+                value: "utf8mb4_general_ci",
+            },
+        ],
+    });
+
+    const dbSubnetGroupName = "my-db-subnet-group";
+
+    const dbSubnetGroup = new aws.rds.SubnetGroup(dbSubnetGroupName, {
+        subnetIds: privateSubnets.map(subnet => subnet.id),
+    });
+
+    //  RDS instance
+
+    const rdsInstanceName = config.require("my-rds-instance");
+    const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
+        allocatedStorage: 20, // Set the allocated storage size as needed
+        backupRetentionPeriod: 7, // Set the backup retention period as needed
+        engine: "postgres",
+        instanceClass: "db.t2.micro", // Use the cheapest one, replace with the desired instance class
+        multiAz: false, // No Multi-AZ deployment
+        name: name,
+        username: dbUserName,
+        password: dbPassword, // Replace with a strong password
+        publiclyAccessible: false, // No public accessibility
+        parameterGroupName: dbParameterGroup.name,
+        vpcSecurityGroupIds: [databaseSecurityGroup.id], // Attach the Database Security Group
+        dbSubnetGroupName: dbSubnetGroup.name,
+        skipFinalSnapshot: true,
+    });
+
+
+    //  EC2
+
+    const myInstance = new aws.ec2.Instance("my-instance", {
+        ami: amiId,
+        instanceType: instanceType,
+        subnetId: selectedPublicSubnet.id,
+        securityGroups: [applicationSecurityGroup.id],
+        keyName: ec2Key.keyName,
+        tags: {
+            Name: "webApp",
+        },
+
+        ebsBlockDevices: [
+            {
+                deviceName: "/dev/xvda",
+                volumeSize: 25,
+                volumeType: "gp2",
+                deleteOnTermination: true, // Ensure EBS volumes are terminated on EC2 termination
+            },
+        ],
+
+        instanceInitiatedShutdownBehavior: "stop",
+        rootBlockDevice: {
+            volumeSize: 25,
+            volumeType: "gp2",
+        },
+
+        userData: pulumi.interpolate`#!/bin/bash
+        sudo mkdir -p /opt/webappgroup/env/test
+        sudo echo 'Script executed successfully' > /opt/webappgroup/env/user-data-success.log
+        mkdir -p /opt/webappgroup/env
+        echo 'dbUrl=jdbc:mysql://${rdsInstance.endpoint}/CloudDB?createDatabaseIfNotExist=true' > /opt/webappgroup/env/.env
+        echo 'dbUserName=${dbUserName}' >> /opt/webappgroup/env/.env
+        echo 'dbPass=${dbPassword}' >> /opt/webappgroup/env/.env
+        echo 'Script executed successfully' > /home/admin/user-data-success.log
+        cat /home/admin/env/.env | tee -a /home/admin/env-success.log
+     `,
+    //  echo 'dbPass=${dbPassword}' >> /home/admin/env/.env
+    }, {dependsOn: [rdsInstance]});
+
+})();
