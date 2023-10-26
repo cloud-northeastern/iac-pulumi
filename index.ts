@@ -39,7 +39,7 @@ function generateSubnetCidrBlocks(baseCidrBlock: string, numSubnets: number): st
 }
 
 
-// Define a name for the VPC
+// name for the VPC
 const vpcDev = config.require("vpcDev");
 const vpc = new aws.ec2.Vpc(vpcDev, { cidrBlock: vpcCidrBlock, tags: { Name: vpcDev, }, });
 
@@ -53,7 +53,7 @@ const applicationSecurityGroupName = config.require("application-security-group"
 
 const applicationSecurityGroup = new aws.ec2.SecurityGroup(applicationSecurityGroupName, {
     vpcId: vpc.id,
-    description: "Security group for the web application",
+    description: "web app Security",
     tags: { Name: applicationSecurityGroupName },
     ingress: [
         {
@@ -75,26 +75,26 @@ const applicationSecurityGroup = new aws.ec2.SecurityGroup(applicationSecurityGr
             cidrBlocks: ["0.0.0.0/0"],
         },
         {
-            fromPort: 9001,
-            toPort: 9001,
+            fromPort: 8080,
+            toPort: 8080,
             protocol: "tcp",
             cidrBlocks: ["0.0.0.0/0"],
         },
         {
-            fromPort: 3306,
-            toPort: 3306,
+            fromPort: 5432,
+            toPort: 5432,
             protocol: "tcp",
             cidrBlocks: ["0.0.0.0/0"],
         },
     ],
-      // Add an egress rule to allow outbound traffic to the RDS instance
+      // 
 
       egress: [
         {
-            fromPort: 3306,
-            toPort: 3306,
+            fromPort: 5432,
+            toPort: 5432,
             protocol: "tcp",
-            // securityGroups: [databaseSecurityGroup.id], // Assuming databaseSecurityGroup is the security group for RDS
+            // securityGroups: [databaseSecurityGroup.id], 
             cidrBlocks: ["0.0.0.0/0"],
         },
     ],
@@ -139,18 +139,16 @@ const createSubnets = async () => {
 
         // Create public subnet
         const publicSubnet = new aws.ec2.Subnet(pubSubnetTag, {
-            // cidrBlock: `10.0.${index + 1}.0/24`,
             cidrBlock: subnetCidrBlocks[index],
             availabilityZone: zone,
             vpcId: vpc.id,
-            mapPublicIpOnLaunch: true, // This makes instances in the public subnet receive public IPs.
+            mapPublicIpOnLaunch: true, 
             tags: { Name: pubSubnetTag, },
         });
         publicSubnets.push(publicSubnet);
 
         // Create private subnet
         const privateSubnet = new aws.ec2.Subnet(priSubnetTag, {
-            // cidrBlock: `10.0.${index + 100}.0/24`, // Assuming a /24 CIDR block for each private subnet.
             cidrBlock: subnetCidrBlocks[index + 3],
             availabilityZone: zone,
             vpcId: vpc.id,
@@ -192,9 +190,9 @@ const publicRoute = new aws.ec2.Route(publicRouteName, {
 
 const public_key = config.require("pub_key");
 
-const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
-    publicKey: public_key,
-});
+// const ec2Key = new aws.ec2.KeyPair("cloud-demo", {
+//     publicKey: public_key,
+// });
 
 (async () => {
     // const publicSubnets= await createSubnets();
@@ -227,8 +225,8 @@ const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
         tags: { Name: databaseSecurityGroupName },
         ingress: [
             {
-                fromPort: 3306,
-                toPort: 3306,
+                fromPort: 5432,
+                toPort: 5432,
                 protocol: "tcp",
                 securityGroups: [applicationSecurityGroup.id],
             },
@@ -238,17 +236,7 @@ const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
 
     const dbParameterGroupName = config.require("db-parameter-group");
     const dbParameterGroup = new aws.rds.ParameterGroup(dbParameterGroupName, {
-        family: "postgres13",
-        parameters: [
-            {
-                name: "character_set_server",
-                value: "utf8mb4",
-            },
-            {
-                name: "collation_server",
-                value: "utf8mb4_general_ci",
-            },
-        ],
+        family: "postgres15",
     });
 
     const dbSubnetGroupName = "my-db-subnet-group";
@@ -261,17 +249,16 @@ const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
 
     const rdsInstanceName = config.require("my-rds-instance");
     const rdsInstance = new aws.rds.Instance(rdsInstanceName, {
-        allocatedStorage: 20, // Set the allocated storage size as needed
-        backupRetentionPeriod: 7, // Set the backup retention period as needed
+        allocatedStorage: 20, 
         engine: "postgres",
-        instanceClass: "db.t2.micro", // Use the cheapest one, replace with the desired instance class
+        instanceClass: "db.t3.micro", 
         multiAz: false, // No Multi-AZ deployment
         name: name,
         username: dbUserName,
-        password: dbPassword, // Replace with a strong password
-        publiclyAccessible: false, // No public accessibility
+        password: dbPassword, 
+        publiclyAccessible: false,  
         parameterGroupName: dbParameterGroup.name,
-        vpcSecurityGroupIds: [databaseSecurityGroup.id], // Attach the Database Security Group
+        vpcSecurityGroupIds: [databaseSecurityGroup.id], 
         dbSubnetGroupName: dbSubnetGroup.name,
         skipFinalSnapshot: true,
     });
@@ -284,7 +271,7 @@ const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
         instanceType: instanceType,
         subnetId: selectedPublicSubnet.id,
         securityGroups: [applicationSecurityGroup.id],
-        keyName: ec2Key.keyName,
+        keyName: "cloud-demo",
         tags: {
             Name: "webApp",
         },
@@ -294,7 +281,7 @@ const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
                 deviceName: "/dev/xvda",
                 volumeSize: 25,
                 volumeType: "gp2",
-                deleteOnTermination: true, // Ensure EBS volumes are terminated on EC2 termination
+                deleteOnTermination: true,
             },
         ],
 
@@ -308,7 +295,7 @@ const ec2Key = new aws.ec2.KeyPair("my-key-pair", {
         sudo mkdir -p /opt/webappgroup/env/test
         sudo echo 'Script executed successfully' > /opt/webappgroup/env/user-data-success.log
         mkdir -p /opt/webappgroup/env
-        echo 'dbUrl=jdbc:mysql://${rdsInstance.endpoint}/CloudDB?createDatabaseIfNotExist=true' > /opt/webappgroup/env/.env
+        echo 'dbUrl=jdbc:postgres://${rdsInstance.endpoint}/CloudDB?createDatabaseIfNotExist=true' > /opt/webappgroup/env/.env
         echo 'dbUserName=${dbUserName}' >> /opt/webappgroup/env/.env
         echo 'dbPass=${dbPassword}' >> /opt/webappgroup/env/.env
         echo 'Script executed successfully' > /home/admin/user-data-success.log

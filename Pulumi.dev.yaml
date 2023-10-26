@@ -1,7 +1,7 @@
 encryptionsalt: v1:EHwdSQ2NFU0=:v1:dMiDNzJaFKbRkRG6:HpmAHgIX2Cv1GMod9GL6qNZ2stxt/w==
 config:
   aws:region: us-east-1
-  amiId: "ami-Id"
+  amiId: "ami-058104f9445a510c9"
   state: "available"
   vpcCidrBlock: 10.0.0.0/16
   cidr: "10.0"
@@ -20,7 +20,7 @@ config:
   public-subnet-assoc: "publicSubnetAssociation"
   private-subnet-assoc: "privateSubnetAssociation"
   public-route: "publicRoute"
-  pub_key: "cloud"
+  pub_key: "cloud-demo"
   database-security-group: "databaseSecurityGroup"
   name: "csye6225"
   username: "csye6225"
