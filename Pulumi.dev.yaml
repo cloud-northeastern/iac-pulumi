@@ -1,8 +1,9 @@
 encryptionsalt: v1:EHwdSQ2NFU0=:v1:dMiDNzJaFKbRkRG6:HpmAHgIX2Cv1GMod9GL6qNZ2stxt/w==
 config:
   aws:region: us-east-1
+  amiId: "ami-Id"
   state: "available"
-  vpcCidr: 10.0.0.0/16
+  vpcCidrBlock: 10.0.0.0/16
   cidr: "10.0"
   cidrEnd : "0/24"
   vpcName: "my-vpc"
@@ -10,4 +11,20 @@ config:
   publicRouteTableName: "public-route-table"
   privateRouteTableName: "private-route-table"
   publicRouteCidrBlock : "0.0.0.0/0"
+  vpcDev: "myVPC"
+  instanceType: "t2.micro"
+  application-security-group: "application-security-group"
+  InternetGateway: "myInternetGateway"
+  public-subnet: "publicSubnet"
+  private-subnet: "privateSubnet"
+  public-subnet-assoc: "publicSubnetAssociation"
+  private-subnet-assoc: "privateSubnetAssociation"
+  public-route: "publicRoute"
+  pub_key: "cloud"
+  database-security-group: "databaseSecurityGroup"
+  name: "csye6225"
+  username: "csye6225"
+  password: "aakashrajawat"
+  db-parameter-group: "parameter-group"
+  my-rds-instance: "rdsinstance"  
 
