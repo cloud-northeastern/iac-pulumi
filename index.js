@@ -303,22 +303,25 @@ aws.getAvailabilityZones({ awsRegion }).then(availableZones => {
         subnetId: publicSubnets[0],
         keyName: "cloud-demo",
         userData: pulumi.interpolate`#!/bin/bash
-        rm /home/webappuser/webapp/.env
-        echo "DB_DIALECT: 'postgres'" >> /home/webappuser/webapp/.env
-        echo "DB_HOST: ${hostname}" >> /home/webappuser/webapp/.env
-        echo "DB_USER: csye6225" >> /home/webappuser/webapp/.env
-        echo "DB_PASSWORD: aakashrajawat" >> /home/webappuser/webapp/.env
-        echo "DB_POSTGRES: csye6225" >> /home/webappuser/webapp/.env
-        echo "APP_PORT: 8080" >> /home/webappuser/webapp/.env
-        chown webappuser:webappuser /home/webappuser/webapp/.env  
+        rm /opt/csye6225/.env
+        echo "DB_DIALECT: 'postgres'" >> /opt/csye6225/.env
+        echo "DB_HOST: ${hostname}" >> /opt/csye6225/.env
+        echo "DB_USER: csye6225" >> /opt/csye6225/.env
+        echo "DB_PASSWORD: aakashrajawat" >> /opt/csye6225/.env
+        echo "DB_POSTGRES: csye6225" >> /opt/csye6225/.env
+        echo "APP_PORT: 8080" >> /opt/csye6225/.env
+        sudo chown csye6225:csye6225 /opt/csye6225/.env  
         sudo systemctl enable webapp.service 
         sudo systemctl restart webapp.service 
-        sudo chown -R webappuser:webappuser /var/logs
-        sudo chmod -R 770 -R /var/logs 
-        sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+        sudo systemctl restart webapp.service
+        sudo chown -R csye6225:csye6225 /opt/csye6225/app.log
+        sudo chmod -R 770 -R /opt/csye6225/app.log
+        sudo chown -R csye6225:csye6225 /opt/csye6225/
+        sudo chmod -R 770 -R /opt/csye6225/ 
+        sudo ../../../opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
             -a fetch-config \
             -m ec2 \
-            -c file:/home/webappuser/webapp/cloudwatch-agent.json \
+            -c file:/opt/csye6225/cloudwatch-agent.json \
             -s
     `,
         vpcSecurityGroupIds: [appSecurityGroup.id],
