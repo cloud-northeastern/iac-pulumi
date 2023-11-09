@@ -8,6 +8,7 @@ var vpcCIDR = config.require('cidrBlock');
 const publicCidrBlock = config.require('publicCidrBlock');
 const amiId =config.require('ami_id');
 const ownerId =config.require('owner_id');
+const iam = require('@pulumi/aws/iam');
 
 
 console.log(awsRegion, "This is the configured region");
@@ -262,6 +263,38 @@ aws.getAvailabilityZones({ awsRegion }).then(availableZones => {
         return parts[0]; 
 
     });
+    
+    //const ec2RoleName = 'coustomRole';
+    const ec2RoleName = 'csye6225';
+
+
+    const ec2Role = new iam.Role('ec2Role', {
+
+        assumeRolePolicy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [{
+                Action: "sts:AssumeRole",
+                Effect: "Allow",
+                Principal: {
+                    Service: "ec2.amazonaws.com",
+                },
+            }],
+        }),
+    });
+
+    const ec2InstanceProfile = new iam.InstanceProfile('ec2InstanceProfile', {
+        name: ec2RoleName,
+        role: ec2Role.name,
+    });
+    
+ 
+
+    // Attach policies to the custom role as needed
+    const policyAttachment = new aws.iam.RolePolicyAttachment("customRoleAttachment", {
+        policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy", 
+        role: ec2Role.name,
+    });
+
 
     const ec2Instance = new aws.ec2.Instance("myEC2Instance", {
         ami: debianAmi.then(debianAmi => debianAmi.id),
@@ -269,8 +302,27 @@ aws.getAvailabilityZones({ awsRegion }).then(availableZones => {
         vpc: vpc.id,
         subnetId: publicSubnets[0],
         keyName: "cloud-demo",
-        userData: pulumi.interpolate`#!/bin/bash\nrm /home/webappuser/webapp/.env\necho "DB_DIALECT: 'postgres'" >> /home/webappuser/webapp/.env\necho "DB_HOST: ${hostname}" >> /home/webappuser/webapp/.env\necho "DB_USER: csye6225" >> /home/webappuser/webapp/.env\necho "DB_PASSWORD: aakashrajawat" >> /home/webappuser/webapp/.env\necho "DB_POSTGRES: csye6225" >> /home/webappuser/webapp/.env\necho "APP_PORT: 8080" >> /home/webappuser/webapp/.env\nchown webappuser:webappuser /home/webappuser/webapp/.env`,
+        userData: pulumi.interpolate`#!/bin/bash
+        rm /home/webappuser/webapp/.env
+        echo "DB_DIALECT: 'postgres'" >> /home/webappuser/webapp/.env
+        echo "DB_HOST: ${hostname}" >> /home/webappuser/webapp/.env
+        echo "DB_USER: csye6225" >> /home/webappuser/webapp/.env
+        echo "DB_PASSWORD: aakashrajawat" >> /home/webappuser/webapp/.env
+        echo "DB_POSTGRES: csye6225" >> /home/webappuser/webapp/.env
+        echo "APP_PORT: 8080" >> /home/webappuser/webapp/.env
+        chown webappuser:webappuser /home/webappuser/webapp/.env  
+        sudo systemctl enable webapp.service 
+        sudo systemctl restart webapp.service 
+        sudo chown -R webappuser:webappuser /var/logs
+        sudo chmod -R 770 -R /var/logs 
+        sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a fetch-config \
+            -m ec2 \
+            -c file:/home/webappuser/webapp/cloudwatch-agent.json \
+            -s
+    `,
         vpcSecurityGroupIds: [appSecurityGroup.id],
+        iamInstanceProfile: ec2InstanceProfile.name,
         rootBlockDevice: {
             volumeSize: 25,
             volumeType: "gp2",
@@ -281,6 +333,26 @@ aws.getAvailabilityZones({ awsRegion }).then(availableZones => {
         },
 
     });
+
+
+    const hostedZoneId = config.require("hosted-zone-id");
+
+    //const domainName = "aakashrajawat.me";
+    const recordName = config.require("domain-name"); 
+
+    const dnsRecord = new aws.route53.Record("dnsRecord", {
+        name: recordName,
+        type: "A",
+        zoneId: hostedZoneId,
+        ttl: 60, 
+        records: [ec2Instance.publicIp], 
+    });
+
+    // Output the DNS record value
+    dnsRecord.fqdn.apply(fqdn => {
+        console.log(`DNS Record: ${fqdn}`);
+    });
+
 
 });
 
