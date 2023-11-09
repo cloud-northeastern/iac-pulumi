@@ -4,7 +4,7 @@ config:
   aws:profile: demo
   cidrBlock: 10.0.0.0/16
   publicCidrBlock: 0.0.0.0/0
-  ami_id: ami-06bc326351938f694
+  ami_id: ami-07253894011884b4c
   owner_id: 437012727216
   hosted-zone-id: Z03705842RFI79X03S5IY
   domain-name: demo.aakashrajawat.me
