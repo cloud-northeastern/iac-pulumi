@@ -1,6 +1,6 @@
 {
     "name": "pulumi-typescript",
-    "main": "index.js",
+    "main": "index.ts",
     "devDependencies": {
         "@types/node": "^16"
     },
