@@ -1,4 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
+import * as gcp from "@pulumi/gcp";
 import { Networking } from "./Networking";
 import { EC2Instance } from "./ec2";
 import { RDSInstance } from "./rds";
@@ -7,8 +9,8 @@ import { LoadBalancerSecurityGroup } from "./LoadBalancerSecurityGroup";
 import { LaunchTemplate } from "./LaunchTemplate";
 import { AutoScalingGroup } from "./AutoScalingGroup";
 import { Route53 } from "./Route53";
-import { ApplicationLoadBalancer } from "./ApplicationLoadBalancer"
-
+import { ApplicationLoadBalancer } from "./ApplicationLoadBalancer";
+//import { Gcloud } from "./gcloud";
 
 //Retrieve base CIDR block from the stack configuration
 const config = new pulumi.Config("starter");  
@@ -88,7 +90,6 @@ const launchTemplate = new LaunchTemplate("launchTemplate", {
 });
 
 
-// Create Auto Scaling Group
 const autoScalingGroup = new AutoScalingGroup("autoScalingGroup", {
     minSize: 1,
     maxSize: 3,
@@ -109,6 +110,10 @@ const dnsRecord = new Route53("route53Record", {
     loadBalancerDnsName: appLoadBalancer.loadBalancer.dnsName,
     loadBalancerZoneId: appLoadBalancer.loadBalancer.zoneId,
 });
+
+
+
+
 
 //exports
 export const vpcId = networking.vpc.id;

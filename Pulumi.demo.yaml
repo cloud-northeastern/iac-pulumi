@@ -1,12 +1,17 @@
 encryptionsalt: v1:VD+wEoNtHmM=:v1:V+iImUGziNWqeeXy:7DJnU/rrLgwMm2pVx9qGa4oJgQxuow==
 config:
   aws:profile: demo
+  gcp:project: maximal-dynamo-406406
   pulumi-typescript:keyName: cloud-demo
-  starter:AmiId: "ami-0d154d60b461a2b68"
+  pulumi-typescript:mailgunApiKey: 94118e799ba4dc6d705184b5885b33e4-30b58138-c9686628
+  pulumi-typescript:mailgunDomain: "aakashrajawat.me"
+  starter:AmiId: "ami-0f76fd6670f705e9b"
   starter:applicationPort: "8080"
   starter:baseCidrBlock: "10.0.0.0/16"
   starter:destinationcider: "0.0.0.0/0"
   starter:keyName: cloud-demo
+  starter:mailgunApiKey: 94118e799ba4dc6d705184b5885b33e4-30b58138-c9686628
+  starter:mailgunDomain: "aakashrajawat.me"
   starter:profile: demo
   starter:rdsDbName: "csye6225"
   starter:rdsInstanceClass: "db.t3.micro"
