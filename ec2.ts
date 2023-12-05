@@ -203,6 +203,7 @@ sudo chown csye6225:csye6225 /opt/csye6225/.env
 sudo systemctl enable webapp.service 
 sudo systemctl restart webapp.service 
 sudo systemctl restart webapp.service
+sudo systemctl restart webapp.service
 sudo chown -R csye6225:csye6225 /opt/csye6225/app.log
 sudo chmod -R 770 -R /opt/csye6225/app.log
 sudo chown -R csye6225:csye6225 /opt/csye6225/
