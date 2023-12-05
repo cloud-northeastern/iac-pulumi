@@ -46,8 +46,9 @@ export class ApplicationLoadBalancer extends pulumi.ComponentResource {
         // Create Listener
         this.listener = new aws.lb.Listener(`${name}-listener`, {
             loadBalancerArn: this.loadBalancer.arn,
-            port: 80,
-            protocol: "HTTP",
+            port: 443,
+            protocol: "HTTPS",
+            certificateArn: 'arn:aws:acm:us-east-1:842863456401:certificate/b4ac7131-3b9a-47e4-b13d-eb296aa29d84', 
             defaultActions: [{
                 type: "forward",
                 targetGroupArn: this.targetGroup.arn,
